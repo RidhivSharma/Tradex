@@ -4,6 +4,7 @@ const userrouter=express.Router();
 const mongoose=require("mongoose");
 const bcrypt = require('bcrypt');
 const { userModel } = require("../models/userdb");
+const jwt=require("jsonwebtoken")
 
 const saltRounds = parseInt(process.env.saltRounds)
 
@@ -55,7 +56,32 @@ userrouter.post("/signup",(req,res)=>{
 
 })
 
+userrouter.post("/login",(req,res)=>{
+    const {email,password}=req.body;
+    userModel.findOne({email})
+    .then((user)=>{
+        bcrypt.compare(password, user.password, function(err, result) {
+            if(result){
+                const token= jwt.sign({ email:user.email }, process.env.JWT_USER_SECRET);
+                res.json({
+                    "token":token
+                    
+                })
 
+
+            }else{
+                return res.json({"msg":"password is not matching try again"})
+            }
+            
+        });
+
+    }).catch((e)=>{
+        console.log(e);
+        return res.json({"msg":"we cand find you exactly"})
+
+    })
+
+})
 
 module.exports={
     userrouter
