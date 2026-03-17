@@ -90,9 +90,20 @@ userrouter.post("/login",(req,res)=>{
 
 userrouter.post("/auth/google",authuser,async (req,res)=>{
     const user=req.user;
-    const { gmailToRead } = req.body;
+    const { gmailToRead, whatsappNumber, forceUpdate } = req.body; // ✅ added forceUpdate
     try {
-        await userModel.findOneAndUpdate({ email: req.user.email }, { gmailToRead })
+        // ✅ added: check if same gmail already exists
+        const existingUser = await userModel.findOne({ email: req.user.email })
+        if (existingUser.gmailToRead && existingUser.gmailToRead === gmailToRead && !forceUpdate) {
+            return res.json({
+                alreadyExists: true,
+                msg: `You are already connected with ${gmailToRead}. Do you want to stay with this or change?`,
+                currentGmail: existingUser.gmailToRead
+            })
+        }
+        // ✅ end of added block
+
+        await userModel.findOneAndUpdate({ email: req.user.email }, { gmailToRead, whatsappNumber })
 
     } catch (error) {
         return res.status(500).json({ message: "Server error", error: error.message })
@@ -100,6 +111,11 @@ userrouter.post("/auth/google",authuser,async (req,res)=>{
     }
     
     try {
+        // Let me explain: `oauth2Client` is a class object in which `generateAuthUrl` is a function
+        // in which you define what things you need from the user. `accessType` means that the user
+        // need not be using your website, but you can still read the data. `scope` tells the function
+        // the permissions required. Responding with JSON to that URL will take you to that URL
+        // with these permissions being asked for.
         const url = await oauth2Client.generateAuthUrl({
         access_type:"offline",
         scope:["https://www.googleapis.com/auth/gmail.readonly"],
@@ -133,12 +149,18 @@ userrouter.get("/auth/google/callback",async(req,res)=>{
 
     oauth2Client.setCredentials(tokens)
 
-    await userModel.findOneAndUpdate({email:state}, {
+    // ✅ added: only save refreshToken if google sent one
+    const updateData = {
         accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token,
         tokenExpiry: new Date(tokens.expiry_date),
         isGoogleConnected: true
-    })
+    }
+    if (tokens.refresh_token) {
+        updateData.refreshToken = tokens.refresh_token
+    }
+    // ✅ end of added block
+
+    await userModel.findOneAndUpdate({email:state}, updateData) // ✅ changed: was passing object directly, now passing updateData
 
     res.json({ message: "Gmail connected successfully ✅" })
 
