@@ -54,15 +54,26 @@ const checkEmails = async () => {
                 const { symbol, price, signal } = parseAlert(subject, body)
 
                 // save to alertsdb
+                // ✅ FIRST send whatsapp
+                const result = await sendWhatsapp(user.whatsappNumber, symbol, signal);
+
+                // ✅ THEN save alert WITH SID
                 await alertmodel.create({
                     symbol,
                     price,
                     signal,
-                    user_id: user._id
-                })
+                    user_id: user._id,
+                    messageSid: result?.sid,        // 🔥 CRITICAL
+                    whatsappSent: false             // initial state
+                });
 
-                // send whatsapp
-                const result = await sendWhatsapp(user.whatsappNumber, symbol, signal)
+                // ✅ update lastEmailId ONLY if message queued
+                if (result?.success) {
+                    await userModel.findByIdAndUpdate(user._id, { lastEmailId: latestEmailId });
+                    console.log(`📨 Message queued for ${user.whatsappNumber} (SID: ${result.sid})`);
+                } else {
+                    console.log(`❌ Failed to send to ${user.whatsappNumber}: ${result?.error}`);
+                }
 
                 // ✅ update lastEmailId ONLY if message queued successfully
                 if (result?.success) {

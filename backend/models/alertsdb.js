@@ -4,7 +4,8 @@ const alertsdbschema = new mongoose.Schema({
     price: { type: Number },
     signal: { type: String },                               // ✅ was "signal" (undefined variable)
     user_id: { type: mongoose.Schema.Types.ObjectId },      // ✅ was mongoose.Schema.type (wrong)
-    whatsappSent: { type: Boolean, default: false }         // ✅ track if notification was sent
+    whatsappSent: { type: Boolean, default: false },
+    messageSid:{type:String}         // ✅ track if notification was sent
 },
 { timestamps: true }
 )

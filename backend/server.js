@@ -23,7 +23,7 @@ app.post("/twilio-status", express.urlencoded({ extended: true }), async (req, r
     if (MessageStatus === "delivered") {
         await alertmodel.findOneAndUpdate(
             { messageSid: MessageSid },
-            { delivered: true }
+            { whatsappSent: true }
         );
     }
 
