@@ -15,7 +15,8 @@ const sendWhatsapp = async (to, symbol, signal) => {
                 "1": symbol,
                 "2": signal
             }),
-            to: `whatsapp:+91${to}`
+            to: `whatsapp:+91${to}`,
+            statusCallback: process.env.TWILIO_STATUS_CALLBACK_URL
         });
 
         console.log("📨 Message SID:", message.sid);
