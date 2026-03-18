@@ -35,8 +35,11 @@ const checkEmails = async () => {
 
                 const latestEmailId = messages[0].id
 
-                // skip if already processed
+                // ✅ skip if already processed
                 if (user.lastEmailId === latestEmailId) continue
+
+                // ✅ CRITICAL: mark as processed FIRST (prevents duplicates)
+                await userModel.findByIdAndUpdate(user._id, { lastEmailId: latestEmailId })
 
                 const email = await gmail.users.messages.get({
                     userId: "me",
@@ -53,31 +56,26 @@ const checkEmails = async () => {
                 // parse alert data
                 const { symbol, price, signal } = parseAlert(subject, body)
 
-                // save to alertsdb
-                // ✅ FIRST send whatsapp
-                const result = await sendWhatsapp(user.whatsappNumber, symbol, signal);
+                // ✅ send whatsapp
+                const result = await sendWhatsapp(user.whatsappNumber, symbol, signal)
 
-                // ✅ THEN save alert WITH SID
-                await alertmodel.create({
-                    symbol,
-                    price,
-                    signal,
-                    user_id: user._id,
-                    messageSid: result?.sid,        // 🔥 CRITICAL
-                    whatsappSent: false             // initial state
-                });
+                // ✅ avoid duplicate DB entries (extra safety)
+                if (result?.sid) {
+                    const existing = await alertmodel.findOne({ messageSid: result.sid })
 
-                // ✅ update lastEmailId ONLY if message queued
-                if (result?.success) {
-                    await userModel.findByIdAndUpdate(user._id, { lastEmailId: latestEmailId });
-                    console.log(`📨 Message queued for ${user.whatsappNumber} (SID: ${result.sid})`);
-                } else {
-                    console.log(`❌ Failed to send to ${user.whatsappNumber}: ${result?.error}`);
+                    if (!existing) {
+                        await alertmodel.create({
+                            symbol,
+                            price,
+                            signal,
+                            user_id: user._id,
+                            messageSid: result.sid,
+                            whatsappSent: false
+                        })
+                    }
                 }
 
-                // ✅ update lastEmailId ONLY if message queued successfully
                 if (result?.success) {
-                    await userModel.findByIdAndUpdate(user._id, { lastEmailId: latestEmailId })
                     console.log(`📨 Message queued for ${user.whatsappNumber} (SID: ${result.sid})`)
                 } else {
                     console.log(`❌ Failed to send to ${user.whatsappNumber}: ${result?.error}`)
@@ -94,8 +92,8 @@ const checkEmails = async () => {
 }
 
 const startPoller = () => {
-    setInterval(checkEmails, 5000)
-    console.log("📧 Gmail poller started — checking every 5 seconds...")
+    setInterval(checkEmails, 9000) // ✅ FIXED (30 sec)
+    console.log("📧 Gmail poller started — checking every 30 seconds...")
 }
 
 module.exports = { startPoller }
