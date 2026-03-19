@@ -11,7 +11,17 @@ const oauth2Client = new google.auth.OAuth2(
     process.env.GOOGLE_REDIRECT_URI
 )
 
+// 🔒 LOCK to prevent overlap
+let isRunning = false;
+
 const checkEmails = async () => {
+    if (isRunning) {
+        console.log("⏳ Skipping: previous run still in progress");
+        return;
+    }
+
+    isRunning = true;
+
     try {
         const users = await userModel.find({ isGoogleConnected: true })
 
@@ -35,10 +45,10 @@ const checkEmails = async () => {
 
                 const latestEmailId = messages[0].id
 
-                // ✅ skip if already processed
+                // ✅ skip already processed
                 if (user.lastEmailId === latestEmailId) continue
 
-                // ✅ CRITICAL: mark as processed FIRST (prevents duplicates)
+                // ✅ mark as processed FIRST (critical)
                 await userModel.findByIdAndUpdate(user._id, { lastEmailId: latestEmailId })
 
                 const email = await gmail.users.messages.get({
@@ -53,17 +63,16 @@ const checkEmails = async () => {
                     ? Buffer.from(bodyData, "base64").toString("utf-8")
                     : email.data.snippet || ""
 
-                // parse alert data
                 const { symbol, price, signal } = parseAlert(subject, body)
 
                 // ✅ send whatsapp
                 const result = await sendWhatsapp(user.whatsappNumber, symbol, signal)
 
-                // ✅ avoid duplicate DB entries (extra safety)
+                // ✅ save ONLY once
                 if (result?.sid) {
-                    const existing = await alertmodel.findOne({ messageSid: result.sid })
+                    const exists = await alertmodel.findOne({ messageSid: result.sid })
 
-                    if (!existing) {
+                    if (!exists) {
                         await alertmodel.create({
                             symbol,
                             price,
@@ -83,16 +92,18 @@ const checkEmails = async () => {
 
             } catch (userError) {
                 console.log(`❌ Error for user ${user.email}:`, userError.message)
-                continue
             }
         }
+
     } catch (error) {
         console.log("Poller error:", error.message)
     }
+
+    isRunning = false; // 🔓 release lock
 }
 
 const startPoller = () => {
-    setInterval(checkEmails, 9000) // ✅ FIXED (30 sec)
+    setInterval(checkEmails, 30000) // ✅ 30 sec
     console.log("📧 Gmail poller started — checking every 30 seconds...")
 }
 
