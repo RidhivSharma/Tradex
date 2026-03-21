@@ -5,6 +5,7 @@ const mongoose=require("mongoose");
 const {google} =require("googleapis")
 const bcrypt = require('bcrypt');
 const { userModel } = require("../models/userdb");
+const { alertmodel } = require("../models/alertsdb");
 const jwt=require("jsonwebtoken");
 const authuser = require("../middleware/authuser");
 
@@ -88,6 +89,62 @@ userrouter.post("/login",(req,res)=>{
 
 })
 
+userrouter.get("/alerts", authuser, async (req, res) => {
+    try {
+        const user = await userModel.findOne({ email: req.user.email })
+        if (!user) {
+            return res.status(404).json({ message: "User not found" })
+        }
+
+        const alerts = await alertmodel
+            .find({ user_id: user._id })
+            .sort({ createdAt: -1 })
+
+        return res.json({ alerts })
+    } catch (error) {
+        return res.status(500).json({ message: "Failed to fetch alerts", error: error.message })
+    }
+})
+
+userrouter.get("/profile", authuser, async (req, res) => {
+    try {
+        const user = await userModel.findOne({ email: req.user.email }).select(
+            "email gmailToRead whatsappNumber isGoogleConnected tokenExpiry"
+        )
+
+        if (!user) {
+            return res.status(404).json({ message: "User not found" })
+        }
+
+        return res.json({
+            profile: {
+                email: user.email,
+                gmailToRead: user.gmailToRead || "",
+                whatsappNumber: user.whatsappNumber || "",
+                isGoogleConnected: Boolean(user.isGoogleConnected),
+                tokenExpiry: user.tokenExpiry || null
+            }
+        })
+    } catch (error) {
+        return res.status(500).json({ message: "Failed to fetch profile", error: error.message })
+    }
+})
+
+userrouter.get("/auth/google/login", async (req, res) => {
+    try {
+        const url = await oauth2Client.generateAuthUrl({
+            access_type: "offline",
+            scope: ["openid", "email", "profile"],
+            state: "login",
+            prompt: "consent"
+        })
+
+        return res.redirect(url)
+    } catch (error) {
+        return res.status(500).json({ message: "Failed to start Google login", error: error.message })
+    }
+})
+
 userrouter.post("/auth/google",authuser,async (req,res)=>{
     const user=req.user;
     const { gmailToRead, whatsappNumber, forceUpdate } = req.body; // ✅ added forceUpdate
@@ -143,26 +200,51 @@ userrouter.post("/auth/google",authuser,async (req,res)=>{
 })
 
 userrouter.get("/auth/google/callback",async(req,res)=>{
-    const {code,state} = req.query
+    const { code, state } = req.query
+    const frontendBaseUrl = process.env.FRONTEND_URL || "http://localhost:5173"
 
-    const {tokens} = await oauth2Client.getToken(code)
+    try {
+        const {tokens} = await oauth2Client.getToken(code)
+        oauth2Client.setCredentials(tokens)
 
-    oauth2Client.setCredentials(tokens)
+        if (state === "login") {
+            const oauth2 = google.oauth2({ version: "v2", auth: oauth2Client })
+            const profile = await oauth2.userinfo.get()
+            const email = profile?.data?.email
 
-    // ✅ added: only save refreshToken if google sent one
-    const updateData = {
-        accessToken: tokens.access_token,
-        tokenExpiry: new Date(tokens.expiry_date),
-        isGoogleConnected: true
+            if (!email) {
+                return res.redirect(`${frontendBaseUrl}/login?error=google_email_not_found`)
+            }
+
+            const user = await userModel.findOneAndUpdate(
+                { email },
+                {
+                    email,
+                    password: bcrypt.hashSync(process.env.GOOGLE_USER_PASSWORD_PLACEHOLDER || "google-oauth-user", saltRounds)
+                },
+                { upsert: true, new: true, setDefaultsOnInsert: true }
+            )
+
+            const token = jwt.sign({ email: user.email }, process.env.JWT_USER_SECRET)
+            return res.redirect(`${frontendBaseUrl}/oauth-callback?token=${encodeURIComponent(token)}`)
+        }
+
+        const updateData = {
+            accessToken: tokens.access_token,
+            tokenExpiry: new Date(tokens.expiry_date),
+            isGoogleConnected: true
+        }
+        if (tokens.refresh_token) {
+            updateData.refreshToken = tokens.refresh_token
+        }
+
+        await userModel.findOneAndUpdate({ email: state }, updateData)
+
+        const token = jwt.sign({ email: state }, process.env.JWT_USER_SECRET)
+        return res.redirect(`${frontendBaseUrl}/oauth-callback?token=${encodeURIComponent(token)}`)
+    } catch (error) {
+        return res.redirect(`${frontendBaseUrl}/login?error=${encodeURIComponent("google_auth_failed")}`)
     }
-    if (tokens.refresh_token) {
-        updateData.refreshToken = tokens.refresh_token
-    }
-    // ✅ end of added block
-
-    await userModel.findOneAndUpdate({email:state}, updateData) // ✅ changed: was passing object directly, now passing updateData
-
-    res.json({ message: "Gmail connected successfully ✅" })
 
 
 

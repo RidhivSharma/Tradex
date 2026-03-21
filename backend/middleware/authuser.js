@@ -2,7 +2,11 @@ require("dotenv").config()
 const jwt = require("jsonwebtoken")
 
 function authuser(req, res, next) {
-    const token = req.headers.token;
+    const authHeader = req.headers.authorization;
+    const bearerToken = authHeader && authHeader.startsWith("Bearer ")
+        ? authHeader.split(" ")[1]
+        : null;
+    const token = bearerToken || req.headers.token;
 
     if (token) {
         try {
