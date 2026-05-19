@@ -1,176 +1,156 @@
-# Tradex ⚡
+# Tradex
 
-> Self-hosted trading alert automation — get TradingView alerts delivered to your WhatsApp for free.
+Tradex is a full-stack app that monitors TradingView alert emails in a connected Gmail inbox and delivers the alerts to WhatsApp. It also provides a dashboard to connect Gmail and WhatsApp, authenticate users, and view alert history.
 
-Tradex monitors your connected Gmail inbox for TradingView alert emails and instantly forwards them to WhatsApp via Twilio. No paid notification services. No middlemen. Just configure your credentials and you're live.
+## How it works
 
----
+1. A user signs up or logs in and receives a JWT from the backend.
+2. The frontend stores the JWT in local storage and attaches it to API requests.
+3. The user connects a Gmail inbox and WhatsApp number; the backend returns a Google OAuth URL for Gmail read access.
+4. After Google OAuth callback, the backend stores Gmail access and refresh tokens in MongoDB and redirects the user back to the frontend.
+5. A poller runs every 30 seconds, reads the latest TradingView alert email, parses it, sends a WhatsApp message via Twilio, and writes the alert to MongoDB.
+6. Twilio calls back `/twilio-status` to mark messages as delivered.
+7. The dashboard polls `/user/alerts` every 5 seconds to show new alerts.
 
-## How It Works
-
-1. User signs up / logs in → receives a JWT
-2. User connects Gmail → backend redirects to Google OAuth for Gmail read access
-3. After OAuth, Gmail tokens are stored securely in MongoDB
-4. A poller runs every **30 seconds** → reads latest TradingView alert email → parses it → sends WhatsApp message via Twilio
-5. Twilio calls back `/twilio-status` to confirm delivery
-6. Dashboard polls `/user/alerts` every 5 seconds to show live alert history
-
----
-
-## Tech Stack
+## Tech stack
 
 **Backend**
-- Node.js + Express
-- MongoDB + Mongoose
-- Google OAuth2 + Gmail API
+- Node.js
+- Express
+- MongoDB with Mongoose
+- Google APIs (OAuth2 + Gmail API)
 - Twilio WhatsApp
-- JWT + bcrypt
+- JWT (jsonwebtoken)
+- bcrypt
+- dotenv
 
 **Frontend**
-- React + React Router
-- Axios + Vite
-
----
+- React
+- React Router
+- Axios
+- Vite
 
 ## Prerequisites
 
-Before you begin, make sure you have:
+- Node.js 20.19+ (required by MongoDB and Mongoose dependencies in the lockfile)
+- npm (comes with Node.js)
+- MongoDB instance (MongoDB Atlas or local MongoDB)
+- Google Cloud project with OAuth2 credentials and Gmail API enabled
+- Twilio account with WhatsApp enabled and a Content Template (Content SID)
+- TradingView account (to send alert emails)
 
-- **Node.js** v20.19+
-- **npm** (comes with Node.js)
-- **MongoDB** — Atlas (cloud) or local instance
-- **Google Cloud project** — OAuth2 credentials + Gmail API enabled
-- **Twilio account** — WhatsApp enabled + an approved Content Template (Content SID)
-- **TradingView account** — to send alert emails
+## Environment variables
 
----
-
-## Environment Variables
-
-Create `backend/.env` using `backend/.env.example` as a starting point.
+Create `backend/.env` using `backend/.env.example` as a starting point and add the missing variables listed below.
 
 | Variable | Required | Description | Where to get it |
-|---|---|---|---|
-| `PORT` | ✅ | Port the backend listens on | Default: `3000` |
-| `mongodb_uri` | ✅ | MongoDB connection string | MongoDB Atlas or local URI |
-| `JWT_USER_SECRET` | ✅ | Secret for signing JWTs | Generate a strong random string |
-| `saltRounds` | ✅ | bcrypt salt rounds | Recommended: `10` |
-| `GOOGLE_CLIENT_ID` | ✅ | OAuth2 client ID | Google Cloud Console → Credentials |
-| `GOOGLE_CLIENT_SECRET` | ✅ | OAuth2 client secret | Google Cloud Console → Credentials |
-| `GOOGLE_REDIRECT_URI` | ✅ | OAuth2 redirect URI | Must match Google OAuth settings exactly e.g. `http://localhost:3000/user/auth/google/callback` |
-| `FRONTEND_URL` | ⬜ | Frontend URL for OAuth redirects | e.g. `http://localhost:5173` |
-| `GOOGLE_USER_PASSWORD_PLACEHOLDER` | ⬜ | Placeholder password for OAuth users | Any random string |
-| `TWILIO_ACCOUNT_SID` | ✅ | Twilio account SID | Twilio Console |
-| `TWILIO_AUTH_TOKEN` | ✅ | Twilio auth token | Twilio Console |
-| `TWILIO_CONTENT_SID` | ✅ | Twilio WhatsApp Content Template SID | Twilio Console → Content Editor |
-| `TWILIO_STATUS_CALLBACK_URL` | ⬜ | Public URL for Twilio delivery callbacks | Use ngrok locally e.g. `https://<id>.ngrok.app/twilio-status` |
-| `VITE_API_BASE_URL` | ⬜ | Backend URL for frontend API calls | Leave empty in dev (Vite proxy handles it) |
+| --- | --- | --- | --- |
+| `PORT` | Yes | Port the backend server listens on. | Choose a port, default is `3000`. |
+| `mongodb_uri` | Yes | MongoDB connection string used by Mongoose. | MongoDB Atlas connection string or local MongoDB URI. |
+| `JWT_USER_SECRET` | Yes | Secret used to sign and verify JWTs. | Generate a strong random string. |
+| `saltRounds` | Yes | bcrypt salt rounds for password hashing. | Choose a number like `10`. |
+| `GOOGLE_CLIENT_ID` | Yes | OAuth2 client ID for Google login and Gmail API. | Google Cloud Console -> Credentials. |
+| `GOOGLE_CLIENT_SECRET` | Yes | OAuth2 client secret. | Google Cloud Console -> Credentials. |
+| `GOOGLE_REDIRECT_URI` | Yes | OAuth2 redirect URI handled by the backend. | Must match Google OAuth settings, e.g. `http://localhost:3000/user/auth/google/callback`. |
+| `FRONTEND_URL` | No | Base URL for frontend redirects after OAuth. | Set to frontend URL like `http://localhost:5173` or production URL. |
+| `GOOGLE_USER_PASSWORD_PLACEHOLDER` | No | Placeholder password used when creating OAuth users. | Any random string; optional. |
+| `TWILIO_ACCOUNT_SID` | Yes | Twilio account SID. | Twilio Console. |
+| `TWILIO_AUTH_TOKEN` | Yes | Twilio auth token. | Twilio Console. |
+| `TWILIO_CONTENT_SID` | Yes | Twilio Content Template SID for WhatsApp messages. | Twilio Console -> Content Editor. |
+| `TWILIO_STATUS_CALLBACK_URL` | No | Public URL Twilio calls for delivery status updates. | Use ngrok or production URL, e.g. `https://<id>.ngrok.app/twilio-status`. |
+| `VITE_API_BASE_URL` | No (frontend) | Base URL for API calls in the frontend. | Use backend URL in production; leave empty for Vite proxy in dev. |
 
----
+## Local setup
 
-## Local Setup
+1. Clone the repository.
+2. Install backend dependencies:
+   - `cd backend`
+   - `npm install`
+3. Configure backend environment variables:
+   - Copy `backend/.env.example` to `backend/.env`.
+   - Add the missing variables: `saltRounds`, `FRONTEND_URL`, and `GOOGLE_USER_PASSWORD_PLACEHOLDER`.
+4. Start the backend server:
+   - `npm start`
+5. Install frontend dependencies:
+   - `cd ../frontend`
+   - `npm install`
+6. (Optional) Create `frontend/.env` and set `VITE_API_BASE_URL` if the frontend is not served from the same origin as the backend.
+7. Start the frontend dev server:
+   - `npm run dev`
+8. Open `http://localhost:5173` in your browser.
 
-### 1 — Clone the repo
+## TradingView alerts (email based)
 
-```bash
-git clone https://github.com/your-username/tradex.git
-cd tradex
-```
+This codebase reads TradingView alerts from Gmail. There is no TradingView webhook endpoint in the current backend.
 
-### 2 — Backend setup
+To connect TradingView alerts:
+1. In TradingView, create or edit an alert.
+2. In the alert "Notifications" section, enable **Send Email**.
+3. Use the Gmail address you connect inside the Tradex dashboard.
+4. Save the alert. TradingView emails are sent from `noreply@tradingview.com`, which is what the poller filters on.
+5. In the Tradex dashboard, connect the same Gmail account and authorize Gmail access.
 
-```bash
-cd backend
-npm install
-cp .env.example .env   # then fill in your values
-npm start
-```
+If you need webhooks instead of email, add a new backend route (for example, `POST /tradingview/webhook`) and configure TradingView to send webhook alerts to that URL.
 
-### 3 — Frontend setup
-
-```bash
-cd ../frontend
-npm install
-npm run dev
-```
-
-### 4 — Open in browser
-
-```
-http://localhost:5173
-```
-
----
-
-## Connecting TradingView Alerts
-
-Tradex reads TradingView alerts via **email** (not webhooks).
-
-1. In TradingView, open or create an alert
-2. Under **Notifications**, enable **Send Email**
-3. Use the same Gmail address you'll connect in the Tradex dashboard
-4. Save the alert — TradingView sends alerts from `noreply@tradingview.com`, which is what the poller filters on
-5. In the Tradex dashboard, connect that Gmail account and authorise access
-
-> **Need webhooks instead?** Add a `POST /tradingview/webhook` route to the backend and point TradingView webhook alerts at that URL.
-
----
-
-## Project Structure
+## Project structure
 
 ```
 Tradex/
-├── backend/
-│   ├── .env.example          # Env variable template
-│   ├── server.js             # App entry — Express, MongoDB, poller start
-│   ├── middleware/
-│   │   └── authuser.js       # JWT auth middleware
-│   ├── models/
-│   │   ├── alertsdb.js       # Alert schema
-│   │   └── userdb.js         # User schema
-│   ├── routes/
-│   │   └── user.js           # Auth, OAuth, profile, alert routes
-│   └── utils/
-│       ├── gmailPoller.js    # Gmail polling + alert processing
-│       ├── parseAlert.js     # Extracts symbol, price, signal from email
-│       └── sendWhatsapp.js   # Twilio WhatsApp send logic
-│
-└── frontend/
-    ├── vite.config.js        # Vite dev server + proxy config
-    └── src/
-        ├── App.jsx           # Route definitions
-        ├── api/
-        │   ├── alerts.js     # Alerts API client
-        │   ├── auth.js       # Auth + Google connect API client
-        │   └── client.js     # Axios instance with JWT handling
-        ├── components/
-        │   ├── AlertCard.jsx
-        │   ├── Navbar.jsx
-        │   ├── ProtectedRoute.jsx
-        │   └── Spinner.jsx
-        └── pages/
-            ├── DashboardPage.jsx
-            ├── LoginPage.jsx
-            └── OAuthCallbackPage.jsx
+  backend/
+    .env.example            # Backend env template
+    package.json            # Backend scripts and dependencies
+    package-lock.json       # Locked backend dependency versions
+    server.js               # Express app bootstrap, Mongo connect, poller start
+    middleware/
+      authuser.js           # JWT auth middleware
+    models/
+      alertsdb.js           # Alert schema and model
+      userdb.js             # User schema and model
+    routes/
+      user.js               # Auth, Google OAuth, profile, and alert routes
+    utils/
+      gmailPoller.js        # Gmail polling and alert processing
+      parseAlert.js         # Extracts symbol, price, signal from email
+      sendWhatsapp.js       # Twilio WhatsApp send logic
+  frontend/
+    index.html              # Vite HTML entry
+    package.json            # Frontend scripts and dependencies
+    package-lock.json       # Locked frontend dependency versions
+    vite.config.js          # Vite dev server and proxy config
+    src/
+      App.jsx               # Route definitions
+      main.jsx              # React entry point
+      styles.css            # Global styles
+      api/
+        alerts.js           # Alerts API client
+        auth.js             # Auth and Google connect API client
+        client.js           # Axios instance with JWT handling
+      components/
+        AlertCard.jsx       # Alert card UI
+        Navbar.jsx          # Header and logout
+        ProtectedRoute.jsx  # Auth-gated route wrapper
+        Spinner.jsx         # Loading indicator
+      pages/
+        DashboardPage.jsx   # Alerts dashboard and Gmail connect flow
+        LoginPage.jsx       # Email/password and Google login
+        OAuthCallbackPage.jsx # Handles OAuth redirect
+      utils/
+        token.js            # Local storage helpers for JWT
+    dist/
+      index.html            # Production build entry
+      assets/
+        index-*.js          # Production JS bundle
+        index-*.css         # Production CSS bundle
+  .gitignore                # Ignores node_modules and .env
 ```
 
----
+## Common issues and gotchas
 
-## Common Issues
-
-| Issue | Fix |
-|---|---|
-| `saltRounds` missing | Set it to a number (e.g. `10`) in `.env` — bcrypt will fail without it |
-| Google OAuth redirect mismatch | `GOOGLE_REDIRECT_URI` must match your Google Cloud OAuth settings exactly |
-| Gmail API not enabled | Enable Gmail API in your Google Cloud project |
-| TradingView alerts not appearing | Make sure email notifications are enabled and the correct Gmail is connected |
-| Twilio status callbacks failing | `TWILIO_STATUS_CALLBACK_URL` must be a **public** URL — use ngrok for local dev |
-| WhatsApp template not working | `TWILIO_CONTENT_SID` must reference an **approved** WhatsApp Content Template |
-| Duplicate alerts | Don't run multiple backend instances — the poller runs in-process and will duplicate |
-| CORS errors in production | Add CORS middleware if frontend and backend are on different domains |
-
----
-
-## License
-
-MIT — use it, fork it, self-host it.
+- **Missing `saltRounds`**: bcrypt will fail if this is not set to a valid number.
+- **Google OAuth redirect mismatch**: `GOOGLE_REDIRECT_URI` must match the OAuth client settings exactly.
+- **Gmail API not enabled**: enable Gmail API in the Google Cloud project, or OAuth will fail.
+- **TradingView alerts not appearing**: ensure the alert email is enabled and sent to the Gmail you connected in the dashboard.
+- **Twilio status updates not working**: `TWILIO_STATUS_CALLBACK_URL` must be a public URL; localhost will not work.
+- **WhatsApp template not approved**: `TWILIO_CONTENT_SID` must reference an approved WhatsApp Content Template.
+- **CORS in production**: the backend does not enable CORS; if frontend and backend are on different domains, add CORS middleware.
+- **Multiple backend instances**: the Gmail poller runs in-process every 30 seconds; running multiple instances can duplicate alerts.
