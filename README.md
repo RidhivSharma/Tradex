@@ -1,15 +1,17 @@
 # Tradex
 
-Tradex is a full-stack app that monitors TradingView alert emails in a connected Gmail inbox and delivers the alerts to WhatsApp. It also provides a dashboard to connect Gmail and WhatsApp, authenticate users, and view alert history.
+## Overview
+
+Tradex monitors TradingView alert emails in a connected Gmail inbox and delivers them to WhatsApp. It also provides a React dashboard for authentication, Gmail/WhatsApp linking, and alert history.
 
 ## How it works
 
 1. A user signs up or logs in and receives a JWT from the backend.
 2. The frontend stores the JWT in local storage and attaches it to API requests.
-3. The user connects a Gmail inbox and WhatsApp number; the backend returns a Google OAuth URL for Gmail read access.
-4. After Google OAuth callback, the backend stores Gmail access and refresh tokens in MongoDB and redirects the user back to the frontend.
+3. The user connects a Gmail inbox and WhatsApp number; the backend returns a Google OAuth URL with Gmail read-only access.
+4. After the Google OAuth callback, the backend stores Gmail access and refresh tokens in MongoDB and redirects back to the frontend.
 5. A poller runs every 30 seconds, reads the latest TradingView alert email, parses it, sends a WhatsApp message via Twilio, and writes the alert to MongoDB.
-6. Twilio calls back `/twilio-status` to mark messages as delivered.
+6. Twilio posts delivery updates to `/twilio-status` to mark messages as delivered.
 7. The dashboard polls `/user/alerts` every 5 seconds to show new alerts.
 
 ## Tech stack
@@ -33,13 +35,13 @@ Tradex is a full-stack app that monitors TradingView alert emails in a connected
 ## Prerequisites
 
 - Node.js 20.19+ (required by MongoDB and Mongoose dependencies in the lockfile)
-- npm (comes with Node.js)
+- npm (bundled with Node.js)
 - MongoDB instance (MongoDB Atlas or local MongoDB)
 - Google Cloud project with OAuth2 credentials and Gmail API enabled
 - Twilio account with WhatsApp enabled and a Content Template (Content SID)
 - TradingView account (to send alert emails)
 
-## Environment variables
+## Environment variables 🔐
 
 Create `backend/.env` using `backend/.env.example` as a starting point and add the missing variables listed below.
 
@@ -52,7 +54,7 @@ Create `backend/.env` using `backend/.env.example` as a starting point and add t
 | `GOOGLE_CLIENT_ID` | Yes | OAuth2 client ID for Google login and Gmail API. | Google Cloud Console -> Credentials. |
 | `GOOGLE_CLIENT_SECRET` | Yes | OAuth2 client secret. | Google Cloud Console -> Credentials. |
 | `GOOGLE_REDIRECT_URI` | Yes | OAuth2 redirect URI handled by the backend. | Must match Google OAuth settings, e.g. `http://localhost:3000/user/auth/google/callback`. |
-| `FRONTEND_URL` | No | Base URL for frontend redirects after OAuth. | Set to frontend URL like `http://localhost:5173` or production URL. |
+| `FRONTEND_URL` | No | Base URL for frontend redirects after OAuth. | Set to frontend URL like `http://localhost:5173` or a production URL. |
 | `GOOGLE_USER_PASSWORD_PLACEHOLDER` | No | Placeholder password used when creating OAuth users. | Any random string; optional. |
 | `TWILIO_ACCOUNT_SID` | Yes | Twilio account SID. | Twilio Console. |
 | `TWILIO_AUTH_TOKEN` | Yes | Twilio auth token. | Twilio Console. |
@@ -71,10 +73,10 @@ Create `backend/.env` using `backend/.env.example` as a starting point and add t
    - Add the missing variables: `saltRounds`, `FRONTEND_URL`, and `GOOGLE_USER_PASSWORD_PLACEHOLDER`.
 4. Start the backend server:
    - `npm start`
-5. Install frontend dependencies:
+5. Install frontend dependencies (in a new terminal):
    - `cd ../frontend`
    - `npm install`
-6. (Optional) Create `frontend/.env` and set `VITE_API_BASE_URL` if the frontend is not served from the same origin as the backend.
+6. Optional: create `frontend/.env` and set `VITE_API_BASE_URL` if the frontend is not served from the same origin as the backend.
 7. Start the frontend dev server:
    - `npm run dev`
 8. Open `http://localhost:5173` in your browser.
@@ -92,59 +94,59 @@ To connect TradingView alerts:
 
 If you need webhooks instead of email, add a new backend route (for example, `POST /tradingview/webhook`) and configure TradingView to send webhook alerts to that URL.
 
-## Project structure
+## Project structure 📁
 
 ```
 Tradex/
   backend/
-    .env.example            # Backend env template
-    package.json            # Backend scripts and dependencies
-    package-lock.json       # Locked backend dependency versions
-    server.js               # Express app bootstrap, Mongo connect, poller start
+    .env.example             # Backend env template
+    package.json             # Backend scripts and dependencies
+    package-lock.json        # Locked backend dependency versions
+    server.js                # Express app bootstrap, Mongo connect, poller start
     middleware/
-      authuser.js           # JWT auth middleware
+      authuser.js            # JWT auth middleware
     models/
-      alertsdb.js           # Alert schema and model
-      userdb.js             # User schema and model
+      alertsdb.js            # Alert schema and model
+      userdb.js              # User schema and model
     routes/
-      user.js               # Auth, Google OAuth, profile, and alert routes
+      user.js                # Auth, Google OAuth, profile, and alert routes
     utils/
-      gmailPoller.js        # Gmail polling and alert processing
-      parseAlert.js         # Extracts symbol, price, signal from email
-      sendWhatsapp.js       # Twilio WhatsApp send logic
+      gmailPoller.js         # Gmail polling and alert processing
+      parseAlert.js          # Extracts symbol, price, signal from email
+      sendWhatsapp.js        # Twilio WhatsApp send logic
   frontend/
-    index.html              # Vite HTML entry
-    package.json            # Frontend scripts and dependencies
-    package-lock.json       # Locked frontend dependency versions
-    vite.config.js          # Vite dev server and proxy config
+    index.html               # Vite HTML entry
+    package.json             # Frontend scripts and dependencies
+    package-lock.json        # Locked frontend dependency versions
+    vite.config.js           # Vite dev server and proxy config
     src/
-      App.jsx               # Route definitions
-      main.jsx              # React entry point
-      styles.css            # Global styles
+      App.jsx                # Route definitions
+      main.jsx               # React entry point
+      styles.css             # Global styles
       api/
-        alerts.js           # Alerts API client
-        auth.js             # Auth and Google connect API client
-        client.js           # Axios instance with JWT handling
+        alerts.js            # Alerts API client
+        auth.js              # Auth and Google connect API client
+        client.js            # Axios instance with JWT handling
       components/
-        AlertCard.jsx       # Alert card UI
-        Navbar.jsx          # Header and logout
-        ProtectedRoute.jsx  # Auth-gated route wrapper
-        Spinner.jsx         # Loading indicator
+        AlertCard.jsx        # Alert card UI
+        Navbar.jsx           # Header and logout
+        ProtectedRoute.jsx   # Auth-gated route wrapper
+        Spinner.jsx          # Loading indicator
       pages/
-        DashboardPage.jsx   # Alerts dashboard and Gmail connect flow
-        LoginPage.jsx       # Email/password and Google login
+        DashboardPage.jsx    # Alerts dashboard and Gmail connect flow
+        LoginPage.jsx        # Email/password and Google login
         OAuthCallbackPage.jsx # Handles OAuth redirect
       utils/
-        token.js            # Local storage helpers for JWT
+        token.js             # Local storage helpers for JWT
     dist/
-      index.html            # Production build entry
+      index.html             # Production build entry
       assets/
-        index-*.js          # Production JS bundle
-        index-*.css         # Production CSS bundle
-  .gitignore                # Ignores node_modules and .env
+        index-*.js           # Production JS bundle
+        index-*.css          # Production CSS bundle
+  .gitignore                 # Ignores node_modules and .env
 ```
 
-## Common issues and gotchas
+## Troubleshooting 🛠
 
 - **Missing `saltRounds`**: bcrypt will fail if this is not set to a valid number.
 - **Google OAuth redirect mismatch**: `GOOGLE_REDIRECT_URI` must match the OAuth client settings exactly.
